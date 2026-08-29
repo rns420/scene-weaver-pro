@@ -255,10 +255,12 @@ export function characterLock(prompt: string, bible?: string): string {
   if (entries.length === 0) return "";
   const lower = prompt.toLowerCase();
   const matched = entries.filter((e) => lower.includes(e.name.toLowerCase()));
-  const use = matched.length > 0 ? matched : entries.slice(0, 2);
+  // Only lock characters actually present in this scene — never inject
+  // the whole cast into a prompt that doesn't mention them.
+  if (matched.length === 0) return "";
   return (
     "Fixed character appearance (must match exactly in every panel): " +
-    use.map((e) => `${e.name} — ${e.traits.replace(/\.$/, "")}`).join("; ") +
+    matched.map((e) => `${e.name} — ${e.traits.replace(/\.$/, "")}`).join("; ") +
     "."
   );
 }
