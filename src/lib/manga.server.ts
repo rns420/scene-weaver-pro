@@ -17,6 +17,9 @@ export const SINGLE_PANEL_GUARD =
   "no character reference sheet, no character lineup, no turnaround, no inset portrait, " +
   "no side panel, no split screen, no collage, no grid, no multiple panels, no borders, " +
   "no duplicated characters, no repeated figures, no extra copies of the same person, " +
+  "ONLY the people explicitly named in this description, no extra people, no bystanders, no crowd, no background characters, " +
+  "no animals of any kind, no cow, no cattle, no sheep, no goat, no horse, no dog, no cat, no birds, no butterflies, no livestock, no wildlife, " +
+  "no invented props or creatures that are not described, " +
   "no text, no captions, no speech bubbles, no watermark, no logo, NOT black and white, no monochrome, no greyscale, no sepia, no screentone dots, no manga halftone, full colour";
 
 export async function zaiChat(
@@ -161,6 +164,7 @@ export async function writePrompts(
           "- Weave a character's fixed traits INLINE into the sentence (e.g. 'Henan, a thin 17-year-old boy with messy black hair, sits...'). " +
           "NEVER write a separate character description block, character sheet, reference, lineup, or 'plus portrait of'.\n" +
           "- Exactly one scene, one moment, one instance of each character. Never ask for multiple panels, insets, collages or side-by-side views.\n" +
+          "- STRICT FIDELITY: describe ONLY what the script line actually says. Never invent people, animals (cows, sheep, goats, dogs, cats, birds), vehicles, crowds or objects that the line does not mention. If the line names no location, keep the background simple and neutral.\n" +
           "- Always full colour. Never describe the image as black and white, monochrome, greyscale or screentone.\n- No text, letters, captions or speech bubbles in the image.\n" +
           "- 35 to 60 words each. English only.\n" +
           "- Do not deliberate or explain. Output the JSON array immediately.\n" +
