@@ -361,5 +361,10 @@ export async function buildVideo(
     if (!data || data.length < 1000) throw e instanceof Error ? e : new Error(String(e));
     onProgress(100, "Video ready");
     return new Blob([data.slice().buffer as ArrayBuffer], { type: "video/mp4" });
+  } finally {
+    cleanupListeners();
+    for (const name of names) await ff.deleteFile(name).catch(() => {});
+    await ff.deleteFile("out.mp4").catch(() => {});
   }
 }
+
