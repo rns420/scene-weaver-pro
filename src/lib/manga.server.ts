@@ -264,8 +264,8 @@ export function characterLock(prompt: string, bible?: string): string {
   // the whole cast into a prompt that doesn't mention them.
   if (matched.length === 0) return "";
   return (
-    "Fixed character appearance (must match exactly in every panel): " +
-    matched.map((e) => `${e.name} — ${e.traits.replace(/\.$/, "")}`).join("; ") +
+    "Fixed character appearance and GENDER (must match exactly in every panel, never swap or change gender): " +
+    matched.map((e) => `${e.name} is ${e.traits.replace(/\.$/, "")}`).join("; ") +
     "."
   );
 }
