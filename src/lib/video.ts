@@ -267,16 +267,36 @@ export async function buildVideo(
     Math.round((durations.reduce((a, b) => a + b, 0) + XF) * FPS),
   );
 
+  const totalSeconds = Math.max(0.1, durations.reduce((a, b) => a + b, 0) + XF);
+
   onProgress(52, "Encoding video… 0%");
   // ffmpeg.wasm's `progress` event is unreliable with filter_complex, so drive
-  // the bar off the encoder's own `frame=` log line — it never looks stuck.
+  // the bar off the encoder's own stats lines (`frame=` / `time=`) and only use
+  // the progress event as a fallback — the bar must never look stuck.
+  let lastPct = 0;
+  const report = (done: number) => {
+    const pct = Math.min(1, Math.max(0, done));
+    if (pct * 100 < lastPct) return;
+    lastPct = pct * 100;
+    onProgress(52 + Math.round(pct * 46), `Encoding video… ${Math.round(pct * 100)}%`);
+  };
   const onFfLog = ({ message }: { message: string }) => {
-    const m = /frame=\s*(\d+)/.exec(message);
-    if (!m) return;
-    const done = Math.min(1, Number(m[1]) / totalFrames);
-    onProgress(52 + Math.round(done * 46), `Encoding video… ${Math.round(done * 100)}%`);
+    const f = /frame=\s*(\d+)/.exec(message);
+    if (f) {
+      report(Number(f[1]) / totalFrames);
+      return;
+    }
+    const t = /time=\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(message);
+    if (t) {
+      const secs = Number(t[1]) * 3600 + Number(t[2]) * 60 + Number(t[3]);
+      report(secs / totalSeconds);
+    }
+  };
+  const onFfProgress = ({ progress }: { progress: number }) => {
+    if (Number.isFinite(progress)) report(progress);
   };
   ff.on("log", onFfLog);
+  ff.on("progress", onFfProgress);
 
   const encode = async (fc: string, label: string) => {
     await ff.exec([
@@ -299,9 +319,21 @@ export async function buildVideo(
       "26",
       "-movflags",
       "+faststart",
+      "-stats",
+      "-stats_period",
+      "0.3",
+      "-loglevel",
+      "info",
+      "-y",
       "out.mp4",
     ]);
   };
+
+  const cleanupListeners = () => {
+    ff.off("log", onFfLog);
+    ff.off("progress", onFfProgress);
+  };
+
 
 
   try {
