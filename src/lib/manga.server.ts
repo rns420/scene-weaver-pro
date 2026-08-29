@@ -20,6 +20,7 @@ export const SINGLE_PANEL_GUARD =
   "ONLY the people explicitly named in this description, no extra people, no bystanders, no crowd, no background characters, " +
   "no animals of any kind, no cow, no cattle, no sheep, no goat, no horse, no dog, no cat, no birds, no butterflies, no livestock, no wildlife, " +
   "no invented props or creatures that are not described, " +
+  "every named character must keep the exact gender stated in this prompt, no gender swapping, no feminized male characters, no masculinized female characters, " +
   "no text, no captions, no speech bubbles, no watermark, no logo, NOT black and white, no monochrome, no greyscale, no sepia, no screentone dots, no manga halftone, full colour";
 
 export async function zaiChat(
@@ -129,7 +130,8 @@ export async function buildCharacterBible(script: string): Promise<string> {
           "You are a manga art director. Read the script (it may be Hinglish/Hindi) and list the recurring characters. " +
           "For each, give ONE compact English line of fixed visual traits usable inside an image prompt: " +
           "age, gender, hair, eyes, face, build, signature clothing. Max 6 characters. " +
-          "Output plain lines like: Henan: 17-year-old Indian boy, messy black hair, sharp dark eyes, thin build, faded grey school shirt. " +
+          "CRITICAL: determine each character's gender from the script (names, pronouns, relationships like brother/sister) and make the gender the FIRST and most emphasized trait — write 'male' or 'female' explicitly plus a matching noun (man/woman/boy/girl). Never guess wrong or leave gender ambiguous. " +
+          "Output plain lines like: Henan: male, 17-year-old Indian boy, messy black hair, sharp dark eyes, thin build, faded grey school shirt. " +
           "No headings, no numbering, no extra commentary. Do not deliberate — answer immediately.",
       },
       { role: "user", content: sample },
@@ -161,8 +163,9 @@ export async function writePrompts(
           "(Hindi/Hinglish). For EACH numbered line write ONE English image prompt describing a SINGLE cinematic " +
           "moment from that line: who is in frame, their action and expression, the setting, the camera angle, and the LIGHTING + COLOUR palette (e.g. 'warm golden sunset light, amber and teal palette'). Each prompt is ONE meaningful visual beat: one shot, one moment.\n" +
           "RULES:\n" +
-          "- Weave a character's fixed traits INLINE into the sentence (e.g. 'Henan, a thin 17-year-old boy with messy black hair, sits...'). " +
-          "NEVER write a separate character description block, character sheet, reference, lineup, or 'plus portrait of'.\n" +
+           "- Weave a character's fixed traits INLINE into the sentence (e.g. 'Henan, a thin 17-year-old boy with messy black hair, sits...'). " +
+           "NEVER write a separate character description block, character sheet, reference, lineup, or 'plus portrait of'.\n" +
+           "- GENDER ACCURACY (critical): every main character from the bible MUST be written with their name AND their exact gender from the bible, using an explicit gendered noun — e.g. 'Henan, a male 17-year-old boy...' or 'Priya, a female 14-year-old girl...'. Never refer to a main character as just 'a man', 'a woman', 'a person', 'he' or 'she' without the name. NEVER change, swap or reverse any character's gender — if the bible says male, the prompt must say male/man/boy; if female, female/woman/girl. For side characters not in the bible, pick one gender from the script context and state it explicitly (e.g. 'a female boss in her 40s, business suit').\n" +
            "- Exactly one scene, one moment, one instance of each character. Never ask for multiple panels, insets, collages or side-by-side views.\n" +
            "- CAST FIDELITY: include ONLY the people that specific script line mentions. If a line mentions only Henan, the prompt must contain Henan ALONE — do not add his sister or anyone else. Never assume two characters are together unless the line says so.\n" +
            "- SIDE CHARACTERS: if the line mentions someone NOT in the character bible (e.g. a boss, teacher, shopkeeper), invent a short distinct visual for them inline (age, gender, one clothing detail) so they look clearly different from the main characters. NEVER substitute a main character's name or traits for a side character.\n" +
@@ -261,8 +264,8 @@ export function characterLock(prompt: string, bible?: string): string {
   // the whole cast into a prompt that doesn't mention them.
   if (matched.length === 0) return "";
   return (
-    "Fixed character appearance (must match exactly in every panel): " +
-    matched.map((e) => `${e.name} — ${e.traits.replace(/\.$/, "")}`).join("; ") +
+    "Fixed character appearance and GENDER (must match exactly in every panel, never swap or change gender): " +
+    matched.map((e) => `${e.name} is ${e.traits.replace(/\.$/, "")}`).join("; ") +
     "."
   );
 }
