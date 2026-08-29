@@ -179,6 +179,7 @@ export async function buildVideo(
   try {
     for (const entry of await ff.listDir("/")) {
       if (entry.isDir) continue;
+      if (!/^(img\d+\.png|out\.mp4)$/.test(entry.name)) continue;
       await ff.deleteFile(entry.name).catch(() => {});
     }
   } catch {
@@ -192,13 +193,21 @@ export async function buildVideo(
     if (!res.ok) throw new Error(`Failed to fetch shot ${i + 1} image (${res.status})`);
     const buf = new Uint8Array(await res.arrayBuffer());
     const name = `img${String(i).padStart(5, "0")}.png`;
-    await ff.writeFile(name, buf);
+    // defensive: the path may still exist if the cleanup above was skipped
+    await ff.deleteFile(name).catch(() => {});
+    try {
+      await ff.writeFile(name, buf);
+    } catch {
+      await ff.deleteFile(name).catch(() => {});
+      await ff.writeFile(name, buf);
+    }
     names.push(name);
     onProgress(
       2 + Math.round((i / shots.length) * 40),
       `Preparing shot ${i + 1}/${shots.length}`,
     );
   }
+
 
   const durations = shots.map((s) => Math.max(0.8, s.end - s.start));
   const n = shots.length;
