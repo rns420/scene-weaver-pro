@@ -90,12 +90,15 @@ function Index() {
       let list: Shot[] = segments.map((s) => ({ ...s, status: "waiting" as const }));
       setShots(list);
 
-      // Prompts + drawing run together: each small batch starts drawing as
-      // soon as its prompts arrive, so nothing waits on the whole script.
-      // One batch per API key slot: batches run at the same time on
-      // different keys instead of queueing behind a single key.
-      const KEY_SLOTS = 4;
-      const BATCH = 3;
+      // Two independent stages.
+      // 1) Every prompt batch is fired at once (one ~20s wave covering the
+      //    whole script) instead of one batch at a time.
+      // 2) Prompts land in a global image queue drained by IMAGE_CONCURRENCY
+      //    workers, so a slow batch never blocks another batch's panels.
+      const PROMPT_WAVES = 4; // parallel chat calls (one per Paralon key)
+      const IMAGE_CONCURRENCY = 8; // ~2 in flight per Pixazo key
+      const BATCH = Math.max(6, Math.ceil(segments.length / PROMPT_WAVES));
+
       const batches: Segment[][] = [];
       for (let i = 0; i < segments.length; i += BATCH) batches.push(segments.slice(i, i + BATCH));
 
@@ -107,49 +110,74 @@ function Index() {
         );
       tick();
 
-      await pool(batches, KEY_SLOTS, async (batch) => {
-        const slot = (batch[0]?.index ?? 0) % KEY_SLOTS;
-        batch.forEach((s) => patch(s.index, { status: "prompting" }));
-        let prompts: string[] = [];
-        try {
-          const res = await getPrompts({ data: { bible: b, segments: batch, slot } });
-          prompts = res.prompts as string[];
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          batch.forEach((s) => patch(s.index, { status: "error", error: msg }));
+      // Global round-robin counter: the next free worker always takes the
+      // next key, so no key idles while another one is busy.
+      let keyTick = 0;
+      const queue: { seg: Segment; prompt: string }[] = [];
+      let promptingDone = false;
+
+      segments.forEach((s) => patch(s.index, { status: "prompting" }));
+
+      const promptStage = Promise.all(
+        batches.map(async (batch, bi) => {
+          try {
+            const res = await getPrompts({ data: { bible: b, segments: batch, slot: bi } });
+            const prompts = res.prompts as string[];
+            batch.forEach((s, i) => {
+              const prompt = prompts[i];
+              if (!prompt) {
+                patch(s.index, { status: "error", error: "no prompt" });
+                return;
+              }
+              patch(s.index, { prompt, status: "waiting" });
+              queue.push({ seg: s, prompt });
+            });
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            batch.forEach((s) => patch(s.index, { status: "error", error: msg }));
+          }
           promptDone += batch.length;
           tick();
-          return;
-        }
-        promptDone += batch.length;
-        tick();
-
-        await Promise.all(
-          batch.map(async (s, i) => {
-            const prompt = prompts[i];
-            if (!prompt) {
-              patch(s.index, { status: "error", error: "no prompt" });
-              return;
-            }
-            patch(s.index, { prompt, status: "drawing" });
-            try {
-              const { url } = await draw({
-                data: { prompt, seed: 1000 + s.index, slot: s.index % KEY_SLOTS, bible: b },
-              });
-              patch(s.index, { url, status: "done" });
-              list = list.map((x) => (x.index === s.index ? { ...x, prompt, url, status: "done" as const } : x));
-            } catch (e) {
-              patch(s.index, {
-                status: "error",
-                prompt,
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-            drawn++;
-            tick();
-          }),
-        );
+        }),
+      ).then(() => {
+        promptingDone = true;
       });
+
+      const worker = async () => {
+        for (;;) {
+          const job = queue.shift();
+          if (!job) {
+            if (promptingDone) return;
+            await new Promise((r) => setTimeout(r, 100));
+            continue;
+          }
+          const { seg: s, prompt } = job;
+          patch(s.index, { status: "drawing" });
+          try {
+            const { url } = await draw({
+              data: { prompt, seed: 1000 + s.index, slot: keyTick++, bible: b },
+            });
+            patch(s.index, { url, status: "done" });
+            list = list.map((x) =>
+              x.index === s.index ? { ...x, prompt, url, status: "done" as const } : x,
+            );
+          } catch (e) {
+            patch(s.index, {
+              status: "error",
+              prompt,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+          drawn++;
+          tick();
+        }
+      };
+
+      await Promise.all([
+        promptStage,
+        ...Array.from({ length: IMAGE_CONCURRENCY }, () => worker()),
+      ]);
+
 
 
       setPhase("done");
