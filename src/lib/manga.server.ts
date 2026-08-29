@@ -173,11 +173,14 @@ export async function writePrompts(
     ],
     {
       temperature: 0.7,
-      maxTokens: 900 + segments.length * 300,
-      timeoutMs: 90_000,
+      maxTokens: 400 + segments.length * 250,
+      // Small batches answer in a few seconds; a call that hangs longer is
+      // stuck, so fail over to another key instead of blocking the wave.
+      timeoutMs: 45_000,
       attempts: 3,
       slot,
     },
+
     );
   } catch (e) {
     // Provider edge 502/504 or timeout: keep the storyboard going with

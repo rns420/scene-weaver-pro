@@ -91,13 +91,15 @@ function Index() {
       setShots(list);
 
       // Two independent stages.
-      // 1) Every prompt batch is fired at once (one ~20s wave covering the
-      //    whole script) instead of one batch at a time.
-      // 2) Prompts land in a global image queue drained by IMAGE_CONCURRENCY
-      //    workers, so a slow batch never blocks another batch's panels.
-      const PROMPT_WAVES = 4; // parallel chat calls (one per Paralon key)
+      // 1) Prompt calls stay SMALL (3 scenes each) so the chat model answers
+      //    fast, but every batch is fired in parallel (PROMPT_CONCURRENCY at a
+      //    time) instead of one batch at a time. Big batches made a single call
+      //    generate thousands of tokens and stall.
+      // 2) Each finished batch immediately feeds a global image queue drained
+      //    by IMAGE_CONCURRENCY workers, so drawing starts within seconds.
+      const BATCH = 3; // small = fast chat responses
+      const PROMPT_CONCURRENCY = 8; // 2 concurrent chat calls per Paralon key
       const IMAGE_CONCURRENCY = 8; // ~2 in flight per Pixazo key
-      const BATCH = Math.max(6, Math.ceil(segments.length / PROMPT_WAVES));
 
       const batches: Segment[][] = [];
       for (let i = 0; i < segments.length; i += BATCH) batches.push(segments.slice(i, i + BATCH));
@@ -118,30 +120,29 @@ function Index() {
 
       segments.forEach((s) => patch(s.index, { status: "prompting" }));
 
-      const promptStage = Promise.all(
-        batches.map(async (batch, bi) => {
-          try {
-            const res = await getPrompts({ data: { bible: b, segments: batch, slot: bi } });
-            const prompts = res.prompts as string[];
-            batch.forEach((s, i) => {
-              const prompt = prompts[i];
-              if (!prompt) {
-                patch(s.index, { status: "error", error: "no prompt" });
-                return;
-              }
-              patch(s.index, { prompt, status: "waiting" });
-              queue.push({ seg: s, prompt });
-            });
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            batch.forEach((s) => patch(s.index, { status: "error", error: msg }));
-          }
-          promptDone += batch.length;
-          tick();
-        }),
-      ).then(() => {
+      const promptStage = pool(batches, PROMPT_CONCURRENCY, async (batch) => {
+        try {
+          const res = await getPrompts({ data: { bible: b, segments: batch, slot: keyTick++ } });
+          const prompts = res.prompts as string[];
+          batch.forEach((s, i) => {
+            const prompt = prompts[i];
+            if (!prompt) {
+              patch(s.index, { status: "error", error: "no prompt" });
+              return;
+            }
+            patch(s.index, { prompt, status: "waiting" });
+            queue.push({ seg: s, prompt });
+          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          batch.forEach((s) => patch(s.index, { status: "error", error: msg }));
+        }
+        promptDone += batch.length;
+        tick();
+      }).then(() => {
         promptingDone = true;
       });
+
 
       const worker = async () => {
         for (;;) {
