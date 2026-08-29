@@ -163,8 +163,10 @@ export async function writePrompts(
           "RULES:\n" +
           "- Weave a character's fixed traits INLINE into the sentence (e.g. 'Henan, a thin 17-year-old boy with messy black hair, sits...'). " +
           "NEVER write a separate character description block, character sheet, reference, lineup, or 'plus portrait of'.\n" +
-          "- Exactly one scene, one moment, one instance of each character. Never ask for multiple panels, insets, collages or side-by-side views.\n" +
-          "- STRICT FIDELITY: describe ONLY what the script line actually says. Never invent people, animals (cows, sheep, goats, dogs, cats, birds), vehicles, crowds or objects that the line does not mention. If the line names no location, keep the background simple and neutral.\n" +
+           "- Exactly one scene, one moment, one instance of each character. Never ask for multiple panels, insets, collages or side-by-side views.\n" +
+           "- CAST FIDELITY: include ONLY the people that specific script line mentions. If a line mentions only Henan, the prompt must contain Henan ALONE — do not add his sister or anyone else. Never assume two characters are together unless the line says so.\n" +
+           "- SIDE CHARACTERS: if the line mentions someone NOT in the character bible (e.g. a boss, teacher, shopkeeper), invent a short distinct visual for them inline (age, gender, one clothing detail) so they look clearly different from the main characters. NEVER substitute a main character's name or traits for a side character.\n" +
+           "- STRICT FIDELITY: describe ONLY what the script line actually says. Never invent people, animals (cows, sheep, goats, dogs, cats, birds), vehicles, crowds or objects that the line does not mention. If the line names no location, keep the background simple and neutral.\n" +
           "- Always full colour. Never describe the image as black and white, monochrome, greyscale or screentone.\n- No text, letters, captions or speech bubbles in the image.\n" +
           "- 35 to 60 words each. English only.\n" +
           "- Do not deliberate or explain. Output the JSON array immediately.\n" +
@@ -255,10 +257,12 @@ export function characterLock(prompt: string, bible?: string): string {
   if (entries.length === 0) return "";
   const lower = prompt.toLowerCase();
   const matched = entries.filter((e) => lower.includes(e.name.toLowerCase()));
-  const use = matched.length > 0 ? matched : entries.slice(0, 2);
+  // Only lock characters actually present in this scene — never inject
+  // the whole cast into a prompt that doesn't mention them.
+  if (matched.length === 0) return "";
   return (
     "Fixed character appearance (must match exactly in every panel): " +
-    use.map((e) => `${e.name} — ${e.traits.replace(/\.$/, "")}`).join("; ") +
+    matched.map((e) => `${e.name} — ${e.traits.replace(/\.$/, "")}`).join("; ") +
     "."
   );
 }
