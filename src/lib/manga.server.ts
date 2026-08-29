@@ -75,7 +75,7 @@ export async function zaiChat(
     // 502/504 come from the provider's edge (HTML body), not the model:
     // back off progressively instead of failing the whole batch.
     if (attempt < attempts - 1)
-      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
   }
   throw new Error(`Text model request failed: ${lastErr}`);
 }
@@ -300,7 +300,7 @@ export async function generateImage(
     } catch (e) {
       lastErr = e instanceof Error ? e.message : String(e);
     }
-    await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
   }
   throw new Error(`Image generation failed: ${lastErr}`);
 }
