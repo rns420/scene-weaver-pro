@@ -190,22 +190,23 @@ function Index() {
 
   async function retryFailed() {
     setPhase("running");
-    const KEY_SLOTS = 4;
-    await pool(failed, KEY_SLOTS, async (shot) => {
+    let keyTick = 0;
+    await pool(failed, 8, async (shot) => {
       patch(shot.index, { status: "drawing" });
       try {
         let prompt = shot.prompt;
         if (!prompt) {
           const { prompts } = await getPrompts({
-            data: { bible, segments: [shot], slot: shot.index % KEY_SLOTS },
+            data: { bible, segments: [shot], slot: keyTick++ },
           });
           prompt = prompts[0] as string;
           patch(shot.index, { prompt });
         }
         const { url } = await draw({
-          data: { prompt, seed: 7000 + shot.index, slot: shot.index % KEY_SLOTS, bible },
+          data: { prompt, seed: 7000 + shot.index, slot: keyTick++, bible },
         });
         patch(shot.index, { url, status: "done", error: undefined });
+
       } catch (e) {
         patch(shot.index, { status: "error", error: e instanceof Error ? e.message : String(e) });
       }
